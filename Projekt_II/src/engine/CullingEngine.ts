@@ -1,10 +1,11 @@
-import { vec3 } from 'gl-matrix';
+import { vec3, mat4 } from 'gl-matrix';
 import { Frustum } from './Frustum';
 import type { Camera } from './Camera';
 import type { Polygon, CullingSettings } from '../types';
 
 export class CullingEngine {
   private frustum: Frustum;
+  private viewMatrix: mat4 = mat4.create();
   settings: CullingSettings;
 
   constructor() {
@@ -19,6 +20,7 @@ export class CullingEngine {
 
   updateFrustum(camera: Camera): void {
     this.frustum.extractFromCamera(camera);
+    this.viewMatrix = camera.getViewMatrix();
   }
 
   isBackFacing(polygon: Polygon, cameraPos: vec3): boolean {
@@ -31,10 +33,17 @@ export class CullingEngine {
     return !this.frustum.testPolygon(polygon);
   }
 
+  computeDepth(polygon: Polygon): number {
+    const c = polygon.center;
+    const m = this.viewMatrix;
+    return m[2] * c[0] + m[6] * c[1] + m[10] * c[2] + m[14];
+  }
+
   cullScene(polygons: Polygon[], cameraPos: vec3): void {
     for (const polygon of polygons) {
       polygon.visible = true;
       polygon.cullingReason = 'visible';
+      polygon.depth = this.computeDepth(polygon);
 
       if (this.settings.enableBackFace && this.isBackFacing(polygon, cameraPos)) {
         polygon.visible = false;

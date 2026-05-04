@@ -8,6 +8,7 @@ export interface Polygon {
   color?: number;
   visible: boolean;
   cullingReason: 'visible' | 'backface' | 'frustum';
+  depth: number;
 }
 
 export interface CullingStats {

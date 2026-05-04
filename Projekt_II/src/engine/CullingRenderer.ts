@@ -19,19 +19,26 @@ export class CullingRenderer {
   private readonly gridHelper: THREE.GridHelper;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, depth: false });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setClearColor(0x080810, 1);
+    this.renderer.sortObjects = false;
 
     this.scene = new THREE.Scene();
 
     this.dummyCamera = new THREE.PerspectiveCamera();
     this.dummyCamera.matrixAutoUpdate = false;
 
-    this.visibleEdgeMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    this.visibleEdgeMat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      depthTest: false,
+      depthWrite: false,
+    });
     this.visibleFillMat = new THREE.MeshBasicMaterial({
       color: 0x1a2a40,
       side: THREE.FrontSide,
+      depthTest: false,
+      depthWrite: false,
     });
 
     this.backfaceEdgeMat = new THREE.LineBasicMaterial({
@@ -100,11 +107,26 @@ export class CullingRenderer {
       .copy(this.dummyCamera.matrixWorldInverse)
       .invert();
 
-    this.scene.add(this.gridHelper.clone());
+    const grid = this.gridHelper.clone();
+    const gridMat = grid.material as THREE.Material | THREE.Material[];
+    if (Array.isArray(gridMat)) {
+      gridMat.forEach((mat) => {
+        mat.depthTest = false;
+        mat.depthWrite = false;
+      });
+    } else {
+      gridMat.depthTest = false;
+      gridMat.depthWrite = false;
+    }
+    this.scene.add(grid);
 
-    for (const polygon of polygons) {
-      if (!polygon.visible && !showCulled) continue;
+    const drawList = polygons.filter((p) => p.visible || showCulled);
+    drawList.sort((a, b) => {
+      if (a.visible !== b.visible) return a.visible ? -1 : 1;
+      return a.depth - b.depth;
+    });
 
+    for (const polygon of drawList) {
       let edgeMat: THREE.LineBasicMaterial;
       let fillMat: THREE.MeshBasicMaterial;
 

@@ -30,6 +30,7 @@ export function createTriangle(v0: vec3, v1: vec3, v2: vec3, color?: number): Po
     color,
     visible: true,
     cullingReason: 'visible',
+    depth: 0,
   };
 }
 
@@ -43,5 +44,6 @@ export function createQuad(v0: vec3, v1: vec3, v2: vec3, v3: vec3, color?: numbe
     color,
     visible: true,
     cullingReason: 'visible',
+    depth: 0,
   };
 }

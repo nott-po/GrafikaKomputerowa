@@ -27,8 +27,6 @@ export class CullingScene {
 
     this.createCube(vec3.fromValues(7, 1.5, -5), 1.5, 0xdd8866);
     this.createCube(vec3.fromValues(8.5, 0.5, -5), 1, 0xdd8866);
-
-    this.createGroundPlane(28, 28);
   }
 
   private createCube(center: vec3, size: number, color: number): void {
@@ -123,21 +121,6 @@ export class CullingScene {
     this.polygons.push(createQuad(v[3], v[4], v[1], v[0], color)); // bottom
     this.polygons.push(createQuad(v[0], v[2], v[5], v[3], color)); // left wall
     this.polygons.push(createQuad(v[2], v[1], v[4], v[5], color)); // slope
-  }
-
-  private createGroundPlane(width: number, depth: number): void {
-    const hw = width / 2;
-    const hd = depth / 2;
-
-    const v0 = vec3.fromValues(-hw, 0, -hd);
-    const v1 = vec3.fromValues( hw, 0, -hd);
-    const v2 = vec3.fromValues( hw, 0,  hd);
-    const v3 = vec3.fromValues(-hw, 0,  hd);
-
-    this.polygons.push(
-      createTriangle(v0, v2, v1, 0x444444),
-      createTriangle(v0, v3, v2, 0x444444),
-    );
   }
 
   getPolygons(): Polygon[] {
