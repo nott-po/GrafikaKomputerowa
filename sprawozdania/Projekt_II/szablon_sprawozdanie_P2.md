@@ -148,8 +148,8 @@ Algorytmy eliminacji stosowane są kolejno, z wcześniejszym przerwaniem przy pi
 
 1. test back-face — pojedynczy iloczyn skalarny
 2. jeśli wielokąt przeszedł test pierwszy — test frustum (do sześciu testów płaszczyznowych)
-3. obliczenie `depth` (głębokość środka w przestrzeni kamery) — niezależnie od wyniku eliminacji, na potrzeby ewentualnego trybu diagnostycznego
-4. sortowanie wszystkich widocznych wielokątów rosnąco po `depth` (od najdalszego do najbliższego)
+3. obliczenie `depth` (minimalne Z spośród wszystkich wierzchołków w przestrzeni kamery) — niezależnie od wyniku eliminacji, na potrzeby fallbacku komparatora
+4. sortowanie widocznych wielokątów komparatorem Newella (test zakresów Z → separacja płaszczyzną A → separacja płaszczyzną B → fallback depth)
 5. rasteryzacja w ustalonej kolejności bez bufora głębi
 
 Kolejność testów eliminacji została dobrana ze względu na koszt obliczeniowy: back-face wykonuje jedno mnożenie skalarne, podczas gdy frustum wymaga w najgorszym przypadku 6 testów płaszczyznowych pomnożonych przez liczbę wierzchołków wielokąta. Wcześniejsze odrzucenie wielokąta na etapie back-face oszczędza pełen koszt testu frustum. Sortowanie odbywa się tylko raz na klatkę i obejmuje już zredukowany zbiór wielokątów.
@@ -257,7 +257,7 @@ Samodzielnie zrealizowane zostały:
 - algorytm back-face culling (test iloczynu skalarnego)
 - ekstrakcja sześciu płaszczyzn frustum z macierzy MVP metodą Gribba-Hartmanna
 - algorytm frustum culling (test punkt-płaszczyzna z konserwatywną interpretacją wielokąta)
-- algorytm malarza — wyznaczanie głębokości środka w przestrzeni kamery oraz sortowanie widocznych wielokątów od najdalszego do najbliższego (zastępuje Z-buffer)
+- algorytm malarza (komparator Newella) — wyznaczanie głębokości najdalszego wierzchołka w przestrzeni kamery oraz sortowanie widocznych wielokątów trzyetapowym komparatorem (zastępuje Z-buffer)
 - pipeline łączący wszystkie testy z optymalizacją kolejności oraz końcowym sortowaniem
 - system statystyk reagujący na zmiany w czasie rzeczywistym
 
@@ -435,14 +435,14 @@ Weryfikację przeprowadzono w czterech etapach: testy każdego algorytmu w izola
 
 - **Kamera wewnątrz obiektu** — przy wejściu kamerą do wnętrza sześcianu wszystkie jego ściany są klasyfikowane jako back-face (normalne wskazują na zewnątrz, kamera znajduje się wewnątrz). Zachowanie zgodne z modelem matematycznym.
 - **Skrajne wartości FOV (15° oraz 100°)** — frustum culling poprawnie reaguje na zmianę szerokości pola widzenia. Przy małym FOV więcej obiektów jest klasyfikowanych jako frustum.
-- **Wszystkie algorytmy wyłączone** — renderowane są wszystkie 71 wielokątów, statystyki pokazują 0% eliminacji.
+- **Wszystkie algorytmy wyłączone** — renderowane są wszystkie 75 wielokątów, statystyki pokazują 0% eliminacji.
 - **Skrajne pozycje kamery** — przy dużych odległościach (na granicy płaszczyzny dalekiej) część obiektów jest poprawnie eliminowana. Przy bardzo dużym oddaleniu wszystkie obiekty trafiają poza frustum.
 
 **Wynik testu:** żaden z przypadków brzegowych nie powoduje błędów ani niespójności w klasyfikacji.
 
 ### 4.8 Wydajność
 
-Aplikacja osiąga stabilną wartość 60 klatek na sekundę (synchronizacja z odświeżaniem ekranu). Czas wykonania całego cyklu culling oraz sortowania algorytmem malarza (ekstrakcja frustum + klasyfikacja 71 wielokątów + sortowanie widocznych) mieści się w pojedynczych ułamkach milisekundy i nie stanowi wąskiego gardła pętli renderowania.
+Aplikacja osiąga stabilną wartość 60 klatek na sekundę (synchronizacja z odświeżaniem ekranu). Czas wykonania całego cyklu culling oraz sortowania algorytmem malarza (ekstrakcja frustum + klasyfikacja 75 wielokątów + sortowanie komparatorem Newella) mieści się w pojedynczych ułamkach milisekundy i nie stanowi wąskiego gardła pętli renderowania.
 
 **[MIEJSCE NA DANE WYDAJNOŚCIOWE]**
 *Screenshot panelu statystyk z licznikiem FPS w różnych konfiguracjach*
@@ -717,7 +717,7 @@ Projekt_II/
 │   │   ├── Polygon.ts             # tworzenie wielokątów + obliczenia normalnych
 │   │   ├── Frustum.ts             # ekstrakcja płaszczyzn + test wielokąta
 │   │   ├── CullingEngine.ts       # back-face + pipeline
-│   │   ├── CullingScene.ts        # generator sceny testowej (71 wielokątów)
+│   │   ├── CullingScene.ts        # generator sceny testowej (75 wielokątów)
 │   │   └── CullingRenderer.ts     # warstwa rysująca (Three.js)
 │   ├── hooks/
 │   │   ├── useCamera.ts           # mapowanie klawiszy na ruch kamery (z P1)
