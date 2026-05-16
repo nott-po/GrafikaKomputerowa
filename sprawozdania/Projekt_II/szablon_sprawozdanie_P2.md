@@ -169,7 +169,7 @@ W trybie domyślnym renderer rysuje wyłącznie wielokąty widoczne. Po włącze
 
 ### 2.2 Struktura Sceny
 
-Scena testowa została zaprojektowana w sposób umożliwiający równoczesną obserwację skuteczności obu algorytmów. Składa się z **71 wielokątów** rozmieszczonych w przestrzeni tak, aby z pozycji domyślnej:
+Scena testowa została zaprojektowana w sposób umożliwiający równoczesną obserwację skuteczności obu algorytmów. Składa się z **75 wielokątów** rozmieszczonych w przestrzeni tak, aby z pozycji domyślnej:
 
 - około połowy ścian każdej bryły zamkniętej była eliminowana przez back-face culling
 - część obiektów wykraczała poza frustum, generując widoczne odrzucenia frustum culling
@@ -189,7 +189,10 @@ Scena testowa została zaprojektowana w sposób umożliwiający równoczesną ob
 | Piramida prawa | 5 | (2.5, 0, −4) | 2.2 |
 | Oktahedr | 8 (trójkątów) | (0, 3.5, −2) | promień 1.2 |
 | Klin (graniastosłup trójkątny) | 5 (2 trójkąty + 3 kwadraty) | (−7, 0, −5) | 2 × 1.5 × 3 |
-| **Suma** | **71** | | |
+| Arkusze testowe (4 płaskie prostokąty) | 4 (po 1 kwadracie każdy) | (3.0–3.9, 1.0, 3.0–4.5) | 1.4 × 2.0 |
+| **Suma** | **75** | | |
+
+**Arkusze testowe** to cztery płaskie prostokąty (1.4 × 2.0) ustawione frontem do kamery po prawej stronie sceny, rozmieszczone co 0.5 jednostki wzdłuż osi Z (głębokości 3.0–4.5) i co 0.3 jednostki wzdłuż osi X. Każdy arkusz to pojedynczy wielokąt czworokątny z normalną skierowaną ku kamerze (+Z). Wzajemne zakrycie arkuszy w polu widzenia umożliwia bezpośrednią obserwację działania algorytmu malarza: każdy bliższy arkusz powinien przykrywać fragment dalszego. Cztery różne kolory (żółty, czerwony, zielony, niebieski) pozwalają łatwo zidentyfikować poprawność kolejności rysowania.
 
 Sześciany skrajne (na pozycjach x = ±14) zostały umieszczone celowo poza domyślnym polem widzenia — z pozycji startowej kamery generują one widoczne eliminacje frustum culling. Sześcian tylny przy z = −12 znajduje się blisko płaszczyzny dalekiej i może być eliminowany przy wycofaniu kamery. Obiekty centralne — bryły zamknięte — demonstrują działanie back-face culling: niezależnie od orientacji kamery, dokładnie połowa ich ścian pozostaje odwrócona tyłem.
 
@@ -405,7 +408,7 @@ Weryfikację przeprowadzono w czterech etapach: testy każdego algorytmu w izola
 
 **Procedura:**
 
-1. Wyłączenie obu algorytmów — wszystkie wielokąty powinny być oznaczone jako widoczne, statystyki powinny pokazywać `visible = total = 71`
+1. Wyłączenie obu algorytmów — wszystkie wielokąty powinny być oznaczone jako widoczne, statystyki powinny pokazywać `visible = total = 75`
 2. Włączenie wyłącznie back-face culling i odczytanie wartości
 3. Wyłączenie back-face, włączenie frustum i odczytanie wartości
 4. Włączenie obu algorytmów — porównanie sumy z wcześniejszymi pomiarami

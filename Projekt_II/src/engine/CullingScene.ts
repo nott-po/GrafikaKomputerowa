@@ -27,6 +27,8 @@ export class CullingScene {
 
     this.createCube(vec3.fromValues(7, 1.5, -5), 1.5, 0xdd8866);
     this.createCube(vec3.fromValues(8.5, 0.5, -5), 1, 0xdd8866);
+
+    this.createPaperStack();
   }
 
   private createCube(center: vec3, size: number, color: number): void {
@@ -121,6 +123,34 @@ export class CullingScene {
     this.polygons.push(createQuad(v[3], v[4], v[1], v[0], color)); // bottom
     this.polygons.push(createQuad(v[0], v[2], v[5], v[3], color)); // left wall
     this.polygons.push(createQuad(v[2], v[1], v[4], v[5], color)); // slope
+  }
+
+  // 4 flat quads (like A4 sheets) placed close together at different depths.
+  // Tests painter's algorithm: each is a single-Z plane, spaced 0.5 units in Z,
+  // overlapping in screen space — algorithm must draw farthest first.
+  private createPaperStack(): void {
+    const w = 0.7; // half-width  → full 1.4
+    const h = 1.0; // half-height → full 2.0
+
+    const sheets: [number, number, number, number][] = [
+      [3.0, 1.0, 3.0, 0xffcc44], // farthest — yellow
+      [3.3, 1.0, 3.5, 0xff4455], // red
+      [3.6, 1.0, 4.0, 0x44cc55], // green
+      [3.9, 1.0, 4.5, 0x4488ff], // nearest — blue
+    ];
+
+    for (const [cx, cy, cz, color] of sheets) {
+      // vertices in CCW order viewed from +Z → normal points toward camera
+      this.polygons.push(
+        createQuad(
+          vec3.fromValues(cx - w, cy - h, cz),
+          vec3.fromValues(cx + w, cy - h, cz),
+          vec3.fromValues(cx + w, cy + h, cz),
+          vec3.fromValues(cx - w, cy + h, cz),
+          color,
+        ),
+      );
+    }
   }
 
   getPolygons(): Polygon[] {
