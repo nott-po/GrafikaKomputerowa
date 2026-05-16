@@ -34,9 +34,15 @@ export class CullingEngine {
   }
 
   computeDepth(polygon: Polygon): number {
-    const c = polygon.center;
+    // Use the farthest vertex Z in camera space (not centroid) — Newell painter's algorithm
+    // In camera space, Z is negative for objects in front; more negative = farther from camera
     const m = this.viewMatrix;
-    return m[2] * c[0] + m[6] * c[1] + m[10] * c[2] + m[14];
+    let minZ = Infinity;
+    for (const v of polygon.vertices) {
+      const z = m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14];
+      if (z < minZ) minZ = z;
+    }
+    return minZ;
   }
 
   cullScene(polygons: Polygon[], cameraPos: vec3): void {

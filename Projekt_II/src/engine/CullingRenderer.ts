@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { vec3 } from 'gl-matrix';
 import type { Camera } from './Camera';
 import type { Polygon } from '../types';
 
@@ -120,10 +121,48 @@ export class CullingRenderer {
     }
     this.scene.add(grid);
 
+    // Newell's painter's algorithm: plane-separation comparator
+    // In camera space, Z is negative for objects in front; more negative = farther.
+    const getZ = (v: vec3): number =>
+      view[2] * v[0] + view[6] * v[1] + view[10] * v[2] + view[14];
+
+    // Signed distance of point p from the plane of polygon poly
+    // (poly.normal points toward camera for front-facing polygons)
+    const planeDist = (poly: Polygon, p: vec3): number =>
+      poly.normal[0] * (p[0] - poly.vertices[0][0]) +
+      poly.normal[1] * (p[1] - poly.vertices[0][1]) +
+      poly.normal[2] * (p[2] - poly.vertices[0][2]);
+
+    const newell = (a: Polygon, b: Polygon): number => {
+      const aZs = a.vertices.map(getZ);
+      const bZs = b.vertices.map(getZ);
+      const aMinZ = Math.min(...aZs); // farthest vertex of A
+      const aMaxZ = Math.max(...aZs); // nearest vertex of A
+      const bMinZ = Math.min(...bZs); // farthest vertex of B
+      const bMaxZ = Math.max(...bZs); // nearest vertex of B
+
+      // Test 1: Z-extents don't overlap → trivial order
+      if (aMaxZ < bMinZ) return -1; // A entirely farther → draw A first
+      if (bMaxZ < aMinZ) return 1;  // B entirely farther → draw B first
+
+      // Test 2: plane of A separates B
+      // negative dist → vertex is behind A's plane (farther from camera)
+      if (b.vertices.every(v => planeDist(a, v) < 0)) return 1;  // B behind A → B drawn first
+      if (b.vertices.every(v => planeDist(a, v) > 0)) return -1; // B in front of A → A drawn first
+
+      // Test 3: plane of B separates A
+      if (a.vertices.every(v => planeDist(b, v) < 0)) return -1; // A behind B → A drawn first
+      if (a.vertices.every(v => planeDist(b, v) > 0)) return 1;  // A in front of B → B drawn first
+
+      // Fallback: farthest vertex Z (polygon.depth already stores this)
+      return a.depth - b.depth;
+    };
+
     const drawList = polygons.filter((p) => p.visible || showCulled);
     drawList.sort((a, b) => {
       if (a.visible !== b.visible) return a.visible ? -1 : 1;
-      return a.depth - b.depth;
+      if (!a.visible) return a.depth - b.depth; // culled ghosts: simple order is fine
+      return newell(a, b);
     });
 
     for (const polygon of drawList) {

@@ -100,26 +100,47 @@ Test ten jest konserwatywny — może zachować wielokąty, które wystają poza
 
 Po fazie eliminacji pozostaje zbiór wielokątów potencjalnie widocznych. Aby uzyskać poprawny obraz bez korzystania z bufora głębi, należy je narysować w odpowiedniej kolejności — od najdalszych do najbliższych. Pozwala to bliższym wielokątom przykryć dalsze, dokładnie tak jak warstwy farby na obrazie. Stąd nazwa: **algorytm malarza** (ang. *painter's algorithm*).
 
-**Wyznaczanie głębokości.** Każdemu wielokątowi przypisywana jest pojedyncza wartość głębokości — współrzędna `z` jego środka po transformacji macierzą widoku kamery. Środek wielokąta jest już obliczony w fazie tworzenia geometrii (średnia arytmetyczna wierzchołków), wystarczy zatem przekształcić go macierzą widoku:
+Implementacja opiera się na oryginalnej metodzie porównywania wielokątów opisanej przez Newella, Newella i Sanchę w artykule *A solution to the hidden surface problem* (1972) — twórców algorytmu malarza. Kluczowym elementem jest **komparator Newella**: zamiast porównywać pojedyncze wartości głębokości centroidu (środka ciężkości), wyznaczana jest wartość dla każdego wierzchołka z osobna i stosowany jest wieloetapowy test separacji płaszczyznami.
 
-- `c_view = View · c_world`
-- `depth = c_view.z`
+**Wyznaczanie głębokości.** Każdemu wielokątowi przypisywana jest wartość głębokości — współrzędna `z` jego **najdalszego wierzchołka** po transformacji macierzą widoku (nie centroidu). Dla każdego wierzchołka `v` obliczana jest jego głębokość w przestrzeni kamery:
 
-W przyjętym układzie współrzędnych (kamera patrzy w kierunku ujemnej osi `Z` przestrzeni widoku) wartości `depth` dla punktów przed kamerą są ujemne; im punkt dalej od kamery, tym wartość bardziej ujemna. Pozwala to posortować wielokąty rosnąco — pierwszy w liście jest najdalszy, ostatni najbliższy.
+- `depth_v = m[2]·v.x + m[6]·v.y + m[10]·v.z + m[14]`
+- `depth = min(depth_v)` — minimum spośród wszystkich wierzchołków wielokąta
 
-Faktyczna implementacja nie wykonuje pełnego mnożenia macierzy przez wektor — wystarcza skalarny iloczyn trzeciego wiersza macierzy widoku z wektorem rozszerzonym `(c_x, c_y, c_z, 1)`. W gl-matrix odpowiada to wyrażeniu `m[2]·c.x + m[6]·c.y + m[10]·c.z + m[14]`.
+W przyjętym układzie współrzędnych (kamera patrzy w kierunku ujemnej osi `Z`) wartości `depth` są ujemne; im bardziej ujemna, tym wierzchołek dalej od kamery. Wartość `depth` przechowuje zatem pozycję najbardziej wysuniętego w głąb wierzchołka — jest to fallback używany wyłącznie gdy testy separacji płaszczyznami nie rozstrzygną kolejności.
 
-**Sortowanie i renderowanie.** Lista widocznych wielokątów sortowana jest w każdej klatce malejąco po odległości od kamery (rosnąco po `depth`). Następnie wielokąty rysowane są w tej kolejności, a wbudowany Z-buffer biblioteki Three.js zostaje wyłączony — całość kontekstu WebGL utworzona została z parametrem `depth: false`, a materiały warstwy widocznej mają ustawione `depthTest: false` oraz `depthWrite: false`. Dodatkowo wyłączone zostało automatyczne sortowanie obiektów Three.js (`renderer.sortObjects = false`), aby kolejność dodawania wielokątów do sceny pozostawała ostatecznym wyznacznikiem porządku rasteryzacji.
+**Sortowanie komparatorem Newella.** Lista widocznych wielokątów sortowana jest w każdej klatce przy użyciu poniższego komparatora. Dla każdej pary wielokątów A i B porównanie przebiega sekwencyjnie przez trzy testy — pierwszy rozstrzygający kończy porównanie:
 
-**Uzasadnienie wyboru.** Sortowanie po głębokości środka wielokąta jest najprostszym wariantem algorytmu malarza — pojedyncza wartość liczbowa na wielokąt, sortowanie standardowym `Array.sort` o złożoności `O(n log n)`. Dla sceny złożonej z brył rozłożonych w przestrzeni (sześciany, piramidy, oktahedr, klin) kryterium środka jest poprawne dla zdecydowanej większości konfiguracji kamery. Po wcześniejszym back-face cullingu nie istnieją sytuacje, w których dwa wielokąty tej samej bryły zamkniętej rywalizują o bycie z przodu — odwrócone tyłem są już odrzucone.
+**Test 1 — rozłączność zakresów Z.** Dla obu wielokątów obliczane są zakresy Z wszystkich wierzchołków w przestrzeni kamery: `[minZ_A, maxZ_A]` oraz `[minZ_B, maxZ_B]`. Jeśli zakresy nie nachodzą na siebie, kolejność jest natychmiastowa:
 
-**Znane ograniczenia.** Algorytm malarza w tej najprostszej formie ma znane przypadki patologiczne:
+- `maxZ_A < minZ_B` → A jest w całości dalej niż B → A rysowane pierwsze
+- `maxZ_B < minZ_A` → B jest w całości dalej niż A → B rysowane pierwsze
 
-- **Wielokąty przecinające się** — gdy płaszczyzny dwóch wielokątów się przecinają, żadna kolejność rysowania całych wielokątów nie daje poprawnego wyniku (rozwiązanie wymagałoby podziału jednego z nich, np. metodą BSP).
-- **Cykle zasłonień** — trzy wielokąty mogą tworzyć cykl `A zasłania B, B zasłania C, C zasłania A`, który również nie ma rozwiązania bez podziału geometrii.
-- **Sortowanie po centrach** — zawodzi, gdy duży wielokąt ma środek dalej niż mniejszy, ale jego brzegi sięgają bliżej (np. duża płaszczyzna podłogi vs mała kostka stojąca na niej).
+**Test 2 — separacja płaszczyzną wielokąta A.** Obliczana jest odległość ze znakiem każdego wierzchołka B od płaszczyzny wielokąta A (wyznaczonej przez normalną `n_A` i pierwszy wierzchołek `v₀_A`):
 
-W przyjętej scenie testowej żaden z tych przypadków nie występuje w sposób ciągły: bryły są rozłożone w przestrzeni i nie przecinają się wzajemnie, podłoga ma większy rozmiar i niski środek, ale po back-face cullingu jest widoczna tylko z góry, a obiekty na niej zawsze mają wyższe środki. Algorytm w prostej postaci jest zatem wystarczający dla zadanego zakresu projektu.
+- `dist = n_A · (v_B − v₀_A)`
+
+Normalna `n_A` wskazuje w stronę kamery dla wielokątów widocznych (zapewnione przez back-face culling). Znak odległości określa po której stronie płaszczyzny leży wierzchołek:
+
+- wartość ujemna → wierzchołek B leży za płaszczyzną A (dalej od kamery)
+- wartość dodatnia → wierzchołek B leży przed płaszczyzną A (bliżej kamery)
+
+Jeśli **wszystkie** wierzchołki B mają `dist < 0` — B leży całkowicie za płaszczyzną A → B rysowane pierwsze (jest dalej). Jeśli **wszystkie** mają `dist > 0` — B leży całkowicie przed A → A rysowane pierwsze.
+
+**Test 3 — separacja płaszczyzną wielokąta B.** Analogiczny test z zamienionymi rolami: wierzchołki A testowane są względem płaszczyzny B.
+
+**Fallback.** Jeśli żaden z trzech testów nie rozstrzygnie kolejności — tzn. wielokąty przecinają wzajemnie swoje płaszczyzny — porównanie degeneruje do różnicy wartości `depth` (najdalszy wierzchołek). Jest to sytuacja wyjątkowa; w przyjętej scenie testowej złożonej z brył wypukłych rozłożonych w przestrzeni nie powinna ona w praktyce wystąpić.
+
+**Renderowanie bez bufora głębi.** Wielokąty rysowane są w ustalonej kolejności, a wbudowany Z-buffer biblioteki Three.js jest całkowicie wyłączony — kontekst WebGL utworzono z parametrem `depth: false`, materiały mają `depthTest: false` oraz `depthWrite: false`, a automatyczne sortowanie Three.js wyłączono przez `renderer.sortObjects = false`.
+
+**Uzasadnienie wyboru metody Newella.** Podejście oparte wyłącznie na centroidzie (środku ciężkości wielokąta) jest powszechnie stosowanym uproszczeniem, ale zawodzi dla dużych lub pochylonych wielokątów — centroid może wskazywać na inną głębokość niż rzeczywisty zasięg geometrii. Komparator Newella eliminuje tę klasę błędów przez testowanie **wszystkich wierzchołków** i użycie płaszczyzny geometrycznej jako separatora. Jest to podejście zgodne z oryginalną publikacją algorytmu i zalecanym sposobem jego implementacji.
+
+**Znane ograniczenia.** Algorytm malarza nawet w wersji Newella ma dwa nierozwiązywalne przypadki bez podziału geometrii:
+
+- **Wielokąty przecinające się** — gdy płaszczyzny dwóch wielokątów się przecinają i żaden test separacji nie rozstrzyga kolejności (fallback do `depth`). Rozwiązanie wymagałoby podziału jednego z wielokątów, np. drzewem BSP.
+- **Cykle zasłonień** — trzy wielokąty tworzące cykl `A zasłania B, B zasłania C, C zasłania A`. Żadna liniowa kolejność rysowania nie daje poprawnego wyniku bez podziału geometrii.
+
+W przyjętej scenie testowej żaden z tych przypadków nie zachodzi: bryły są rozłożone w przestrzeni i nie przecinają się wzajemnie. Komparator Newella rozstrzyga wszystkie pary na etapach 1–3.
 
 #### 2.1.4 Pipeline łączący wszystkie algorytmy
 
@@ -202,12 +223,12 @@ Wszystkie obiekty sceny zdefiniowane są w globalnym układzie współrzędnych.
 2. Wyznaczenie aktualnej macierzy widoku oraz macierzy projekcji
 3. Wyznaczenie macierzy `M = Projection × View` oraz ekstrakcja sześciu płaszczyzn frustum metodą Gribba-Hartmanna
 4. Dla każdego wielokąta sceny:
-   - **a.** obliczenie głębokości środka w przestrzeni kamery (`depth = wiersz_3(View) · center`)
+   - **a.** obliczenie głębokości w przestrzeni kamery (`depth = min z wszystkich wierzchołków po transformacji macierzą widoku`)
    - **b.** test back-face — obliczenie wektora widoku do kamery, iloczyn skalarny z normalną; jeśli ujemny — oznaczenie jako `backface` i przejście do kolejnego wielokąta
    - **c.** test frustum — sprawdzenie, czy wszystkie wierzchołki leżą po zewnętrznej stronie którejkolwiek płaszczyzny; jeśli tak — oznaczenie jako `frustum`
    - **d.** w przeciwnym razie wielokąt pozostaje oznaczony jako widoczny
 5. Aktualizacja statystyk — zliczenie wielokątów w każdej kategorii
-6. **Sortowanie algorytmem malarza** — widoczne wielokąty sortowane rosnąco po `depth` (najdalsze na początku listy, najbliższe na końcu)
+6. **Sortowanie komparatorem Newella** — widoczne wielokąty sortowane komparatorem trzyetapowym: test rozłączności zakresów Z, separacja płaszczyzną A, separacja płaszczyzną B; fallback do `depth` (najdalszy wierzchołek)
 7. Renderowanie — wielokąty rysowane w ustalonej kolejności bez bufora głębi (depth test wyłączony w warstwie WebGL i w materiałach). W trybie diagnostycznym ghosty wielokątów odrzuconych dorysowywane są na końcu jako półprzezroczyste markery
 
 **[MIEJSCE NA SCHEMAT BLOKOWY]**
@@ -486,7 +507,7 @@ Aplikacja osiąga stabilną wartość 60 klatek na sekundę (synchronizacja z od
 | Statystyki w czasie rzeczywistym | spełnione |
 | Tryb diagnostyczny z kolorowaniem | spełnione |
 | Sterowanie kamerą (kontynuacja P1) | spełnione |
-| Samodzielna implementacja algorytmów | spełnione (back-face, frustum, ekstrakcja Gribba-Hartmanna) |
+| Samodzielna implementacja algorytmów | spełnione (back-face, frustum culling, ekstrakcja Gribba-Hartmanna, komparator Newella) |
 
 ### 7.2 Wnioski końcowe
 
@@ -584,26 +605,62 @@ testPolygon(polygon: Polygon): boolean {
 }
 ```
 
-**Wyznaczanie głębokości w przestrzeni kamery (algorytm malarza):**
+**Wyznaczanie głębokości — najdalszy wierzchołek (algorytm malarza, Newell):**
 
 ```typescript
 computeDepth(polygon: Polygon): number {
-  // trzeci wiersz macierzy widoku (kolumna-major) razy (cx, cy, cz, 1)
-  const c = polygon.center;
+  // Najdalszy wierzchołek w przestrzeni kamery (nie centroid)
+  // Bardziej ujemna wartość Z = dalej od kamery
   const m = this.viewMatrix;
-  return m[2] * c[0] + m[6] * c[1] + m[10] * c[2] + m[14];
+  let minZ = Infinity;
+  for (const v of polygon.vertices) {
+    const z = m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14];
+    if (z < minZ) minZ = z;
+  }
+  return minZ;
 }
 ```
 
-**Sortowanie widocznych wielokątów od najdalszego do najbliższego:**
+**Komparator Newella — sortowanie widocznych wielokątów od najdalszego do najbliższego:**
 
 ```typescript
+// Odległość ze znakiem punktu p od płaszczyzny wielokąta poly
+const planeDist = (poly: Polygon, p: vec3): number =>
+  poly.normal[0] * (p[0] - poly.vertices[0][0]) +
+  poly.normal[1] * (p[1] - poly.vertices[0][1]) +
+  poly.normal[2] * (p[2] - poly.vertices[0][2]);
+
+const newell = (a: Polygon, b: Polygon): number => {
+  const aZs = a.vertices.map(getZ);
+  const bZs = b.vertices.map(getZ);
+  const aMinZ = Math.min(...aZs);  // najdalszy wierzchołek A
+  const aMaxZ = Math.max(...aZs);  // najbliższy wierzchołek A
+  const bMinZ = Math.min(...bZs);
+  const bMaxZ = Math.max(...bZs);
+
+  // Test 1: zakresy Z nie nachodzą → kolejność trywialna
+  if (aMaxZ < bMinZ) return -1;  // A całkowicie dalej → A rysowane pierwsze
+  if (bMaxZ < aMinZ) return 1;   // B całkowicie dalej → B rysowane pierwsze
+
+  // Test 2: płaszczyzna A separuje B (dist < 0 → wierzchołek za płaszczyzną = dalej)
+  if (b.vertices.every(v => planeDist(a, v) < 0)) return 1;   // B za A → B pierwsze
+  if (b.vertices.every(v => planeDist(a, v) > 0)) return -1;  // B przed A → A pierwsze
+
+  // Test 3: płaszczyzna B separuje A
+  if (a.vertices.every(v => planeDist(b, v) < 0)) return -1;  // A za B → A pierwsze
+  if (a.vertices.every(v => planeDist(b, v) > 0)) return 1;   // A przed B → B pierwsze
+
+  // Fallback: najdalszy wierzchołek Z
+  return a.depth - b.depth;
+};
+
 const drawList = polygons.filter((p) => p.visible || showCulled);
 drawList.sort((a, b) => {
   if (a.visible !== b.visible) return a.visible ? -1 : 1;
-  return a.depth - b.depth; // mniejsza (bardziej ujemna) wartość = dalej
+  if (!a.visible) return a.depth - b.depth;
+  return newell(a, b);
 });
-// rasteryzacja w ustalonej kolejności, bez bufora głębi
+// rasteryzacja w ustalonej kolejności, Z-buffer wyłączony
 ```
 
 **Wyłączenie bufora głębi w warstwie renderera:**
